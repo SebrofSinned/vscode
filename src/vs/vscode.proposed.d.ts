@@ -1064,9 +1064,11 @@ declare module 'vscode' {
 		 * @param position The position at which the command was invoked.
 		 * @param token A cancellation token.
 		 * @return A list of ranges that can be live-renamed togehter. The ranges must have
-		 * identical length and contain identical text content. The ranges cannot overlap.
+		 * identical length and contain identical text content. The ranges cannot overlap. Optional a word pattern
+		 * that overrides the word pattern defined when registering the provider. Live rename stops as soon as the renamed content
+		 * no longer matches the word pattern.
 		 */
-		provideOnTypeRenameRanges(document: TextDocument, position: Position, token: CancellationToken): ProviderResult<Range[]>;
+		provideOnTypeRenameRanges(document: TextDocument, position: Position, token: CancellationToken): ProviderResult<{ ranges: Range[]; wordPattern?: RegExp; }>;
 	}
 
 	namespace languages {
@@ -1079,10 +1081,10 @@ declare module 'vscode' {
 		 *
 		 * @param selector A selector that defines the documents this provider is applicable to.
 		 * @param provider An on type rename provider.
-		 * @param stopPattern Stop on type renaming when input text matches the regular expression. Defaults to `^\s`.
+		 * @param wordPattern Word pattern for this provider.
 		 * @return A [disposable](#Disposable) that unregisters this provider when being disposed.
 		 */
-		export function registerOnTypeRenameProvider(selector: DocumentSelector, provider: OnTypeRenameProvider, stopPattern?: RegExp): Disposable;
+		export function registerOnTypeRenameProvider(selector: DocumentSelector, provider: OnTypeRenameProvider, wordPattern?: RegExp): Disposable;
 	}
 
 	//#endregion
@@ -1321,11 +1323,12 @@ declare module 'vscode' {
 
 	export interface NotebookDocument {
 		readonly uri: Uri;
+		readonly version: number;
 		readonly fileName: string;
 		readonly viewType: string;
 		readonly isDirty: boolean;
 		readonly isUntitled: boolean;
-		readonly cells: NotebookCell[];
+		readonly cells: ReadonlyArray<NotebookCell>;
 		languages: string[];
 		displayOrder?: GlobPattern[];
 		metadata: NotebookDocumentMetadata;
@@ -1351,7 +1354,14 @@ declare module 'vscode' {
 	}
 
 	export interface NotebookEditorCellEdit {
+
+		replaceCells(from: number, to: number, cells: NotebookCellData[]): void;
+		replaceOutputs(index: number, outputs: CellOutput[]): void;
+		replaceMetadata(index: number, metadata: NotebookCellMetadata): void;
+
+		/** @deprecated */
 		insert(index: number, content: string | string[], language: string, type: CellKind, outputs: CellOutput[], metadata: NotebookCellMetadata | undefined): void;
+		/** @deprecated */
 		delete(index: number): void;
 	}
 
@@ -1369,7 +1379,7 @@ declare module 'vscode' {
 		/**
 		 * The column in which this editor shows.
 		 */
-		viewColumn?: ViewColumn;
+		readonly viewColumn?: ViewColumn;
 
 		/**
 		 * Whether the panel is active (focused by the user).
@@ -1420,31 +1430,6 @@ declare module 'vscode' {
 		output: CellDisplayOutput;
 		mimeType: string;
 		outputId: string;
-	}
-
-	export interface NotebookOutputRenderer {
-		/**
-		 *
-		 * @returns HTML fragment. We can probably return `CellOutput` instead of string ?
-		 *
-		 */
-		render(document: NotebookDocument, request: NotebookRenderRequest): string;
-
-		/**
-		 * Call before HTML from the renderer is executed, and will be called for
-		 * every editor associated with notebook documents where the renderer
-		 * is or was used.
-		 *
-		 * The communication object will only send and receive messages to the
-		 * render API, retrieved via `acquireNotebookRendererApi`, acquired with
-		 * this specific renderer's ID.
-		 *
-		 * If you need to keep an association between the communication object
-		 * and the document for use in the `render()` method, you can use a WeakMap.
-		 */
-		resolveNotebook?(document: NotebookDocument, communication: NotebookCommunication): void;
-
-		readonly preloads?: Uri[];
 	}
 
 	export interface NotebookCellsChangeData {
@@ -1500,9 +1485,9 @@ declare module 'vscode' {
 	export interface NotebookCellData {
 		readonly cellKind: CellKind;
 		readonly source: string;
-		language: string;
-		outputs: CellOutput[];
-		metadata: NotebookCellMetadata;
+		readonly language: string;
+		readonly outputs: CellOutput[];
+		readonly metadata: NotebookCellMetadata | undefined;
 	}
 
 	export interface NotebookData {
@@ -1663,12 +1648,6 @@ declare module 'vscode' {
 			id: string,
 			selectors: GlobPattern[],
 			kernel: NotebookKernel
-		): Disposable;
-
-		export function registerNotebookOutputRenderer(
-			id: string,
-			outputSelector: NotebookOutputSelector,
-			renderer: NotebookOutputRenderer
 		): Disposable;
 
 		export const onDidOpenNotebookDocument: Event<NotebookDocument>;

@@ -5,7 +5,7 @@
 
 import { onUnexpectedError } from 'vs/base/common/errors';
 import { Disposable, IDisposable } from 'vs/base/common/lifecycle';
-import { MainThreadWebviews, webviewPanelViewType } from 'vs/workbench/api/browser/mainThreadWebview';
+import type { MainThreadWebviews } from 'vs/workbench/api/browser/mainThreadWebview';
 import * as extHostProtocol from 'vs/workbench/api/common/extHost.protocol';
 import { editorGroupToViewColumn } from 'vs/workbench/api/common/shared/editor';
 import { CustomEditorInput } from 'vs/workbench/contrib/customEditor/browser/customEditorInput';
@@ -40,7 +40,7 @@ export class MainThreadWebviewSerializers extends Disposable {
 					return false;
 				}
 
-				const viewType = webviewPanelViewType.toExternal(webview.viewType);
+				const viewType = this.mainThreadWebviews.webviewPanelViewType.toExternal(webview.viewType);
 				if (typeof viewType === 'string') {
 					extensionService.activateByEvent(`onWebviewPanel:${viewType}`);
 				}
@@ -57,12 +57,12 @@ export class MainThreadWebviewSerializers extends Disposable {
 
 		this._revivers.set(viewType, this._webviewWorkbenchService.registerResolver({
 			canResolve: (webviewInput) => {
-				return webviewInput.viewType === webviewPanelViewType.fromExternal(viewType);
+				return webviewInput.viewType === this.mainThreadWebviews.webviewPanelViewType.fromExternal(viewType);
 			},
 			resolveWebview: async (webviewInput): Promise<void> => {
-				const viewType = webviewPanelViewType.toExternal(webviewInput.viewType);
+				const viewType = this.mainThreadWebviews.webviewPanelViewType.toExternal(webviewInput.viewType);
 				if (!viewType) {
-					webviewInput.webview.html = MainThreadWebviews.getWebviewResolvedFailedContent(webviewInput.viewType);
+					webviewInput.webview.html = this.mainThreadWebviews.getWebviewResolvedFailedContent(webviewInput.viewType);
 					return;
 				}
 
@@ -84,7 +84,7 @@ export class MainThreadWebviewSerializers extends Disposable {
 					await this._proxy.$deserializeWebviewPanel(handle, viewType, webviewInput.getTitle(), state, editorGroupToViewColumn(this._editorGroupService, webviewInput.group || 0), webviewInput.webview.options);
 				} catch (error) {
 					onUnexpectedError(error);
-					webviewInput.webview.html = MainThreadWebviews.getWebviewResolvedFailedContent(viewType);
+					webviewInput.webview.html = this.mainThreadWebviews.getWebviewResolvedFailedContent(viewType);
 				}
 			}
 		}));
